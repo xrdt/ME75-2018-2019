@@ -1,0 +1,6 @@
+src/husky
+src/imu_tools
+src/rgbd_launch
+src/openni_camera
+devel/*
+build/*
