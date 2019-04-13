@@ -4,3 +4,4 @@ src/rgbd_launch
 src/openni_camera
 devel/*
 build/*
+*.swp
