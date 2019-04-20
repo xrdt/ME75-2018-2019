@@ -62,7 +62,7 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
   seg.setMethodType (pcl::SAC_RANSAC);
   seg.setDistanceThreshold(m_groundFilterPlaneDistance);
   // Axis along wihch to search for a model perpendicular to
-  seg.setAxis(Eigen::Vector3f(0,1,0));
+  seg.setAxis(Eigen::Vector3f(0,0,1));
   // Distance to model threshold
   seg.setDistanceThreshold (0.01);
  
@@ -105,6 +105,7 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
           cloud_filtered = cloud_out;
         }
         groundPlaneFound = true;
+
       } else{
         ROS_DEBUG("Horizontal plane (not ground) found: %zu/%zu inliers. Coeff: %f %f %f %f", inliers->indices.size(), cloud_filtered.size(),
                   coefficients->values.at(0), coefficients->values.at(1), coefficients->values.at(2), coefficients->values.at(3));
@@ -117,35 +118,42 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
         if(inliers->indices.size() != cloud_filtered.size()){
           extract.setNegative(true);
           cloud_out.points.clear();
-          // Move all the negative points into 
+          // Move all the points that were detected as being part of this plane into cloud_out 
           extract.filter(cloud_out);
           cloud_filtered = cloud_out;
-        } else{
+        } else {
+          // The entire cloud is the plane. This plane is not the ground, so clear it. 
           cloud_filtered.points.clear();
         }
       }
+  }
 
-    }
-    // TODO: also do this if overall starting pointcloud too small?
-    if (!groundPlaneFound){ // no plane found or remaining points too small
-      ROS_WARN("No ground plane found in scan");
+  // TODO: also do this if overall starting pointcloud too small?
+  if (!groundPlaneFound) { // no plane found or remaining points too small
+    ROS_WARN("No ground plane found in scan");
 
-      // do a rough fitlering on height to prevent spurious obstacles
-      pcl::PassThrough<PCLPoint> second_pass;
-      second_pass.setFilterFieldName("z");
-      second_pass.setFilterLimits(-m_groundFilterPlaneDistance, m_groundFilterPlaneDistance);
-      second_pass.setInputCloud(pc.makeShared());
-      second_pass.filter(ground);
+    // do a rough filtering on height to prevent spurious obstacles
+    pcl::PassThrough<PCLPoint> second_pass;
+    second_pass.setFilterFieldName("z");
+    second_pass.setFilterLimits(-m_groundFilterPlaneDistance, m_groundFilterPlaneDistance);
+    // pc is the original input cloud
+    second_pass.setInputCloud(pc.makeShared());
+    // say that everything within the interval is ground
+    second_pass.filter(ground);
 
-      second_pass.setFilterLimitsNegative (true);
-      second_pass.filter(nonground);
-    }
+    // True means to return all the data outside the interval 
+    second_pass.setFilterLimitsNegative (true);
+    second_pass.filter(nonground);
+  }
 
-  sensor_msgs::PointCloud2 output;
-  pcl::toROSMsg(cloud_filtered, output);
-  pub1.publish(cloud_filtered);
+  sensor_msgs::PointCloud2& output;
+  pcl::toROSMsg(cloud_filtered, 8output);
+  pub1.publish(output);
+  // End Octomap stuff
 
-  seg.setInputCloud (cloud.makeShared ());
+  /*
+  // Begin find biggest plane stuff from tutorial
+  seg.setInputCloud (cloud.makeShared());
   seg.segment (*inliers, *coefficients);
 
   if (inliers->indices.size () == 0)
@@ -153,22 +161,25 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
       std::cerr << "Could not estimate a planar model for the given dataset." << std::endl;
   }
 
+  // Extract the plane into cloud_p
   extract.setInputCloud (cloud.makeShared());
   extract.setIndices (inliers);
   extract.setNegative (false);
   extract.filter (*cloud_p);
   std::cerr << "PointCloud representing the planar component: " << cloud_p->width * cloud_p->height << " data points." << std::endl;
 
+  // Convert back into PointCloud2 type
   pcl::toROSMsg (*cloud_p, *final_cloud);
 
   pub1.publish (final_cloud); // publish the new pcl
-
 
   // Publish the model coefficients
   pcl_msgs::ModelCoefficients ros_coefficients;
   pcl_conversions::fromPCL(coefficients, ros_coefficients);
   pub2.publish (ros_coefficients);
+  */
 
+  /* Begin PCL VoxelGrid downsampling
   // Container for original & filtered data
   pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2; 
   pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
@@ -189,6 +200,7 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
 
   // Publish the data
   pub.publish (output);
+  */
 }
 
 int
